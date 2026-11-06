@@ -24,40 +24,53 @@ const adminRouters: AdminRouterContract[] = [
 test("administrative route families authenticate and authorize before validation or upload parsing", () => {
     for (const contract of adminRouters) {
         const source = readFileSync(resolve(process.cwd(), contract.path), "utf8");
-        const routerDeclaration = source.indexOf(\`const \${contract.routerName} = Router();\`);
+        const routerDeclaration = source.indexOf("const " + contract.routerName + " = Router();");
 
         assert.notEqual(
             routerDeclaration,
             -1,
-            \`\${contract.path}: missing \${contract.routerName} declaration\`,
+            contract.path + ": missing " + contract.routerName + " declaration",
         );
 
         const routePattern = new RegExp(
-            String.raw\`\\b\${contract.routerName}\\.(?:get|post|patch|put|delete)\\([\\s\\S]*?\\);\`,
+            "\\b" + contract.routerName + "\\.(?:get|post|patch|put|delete)\\([\\s\\S]*?\\);",
             "g",
         );
         const routeMatches = [...source.matchAll(routePattern)];
-        assert.ok(routeMatches.length > 0, \`\${contract.path}: no routes found for \${contract.routerName}\`);
-
-        const firstRouteIndex = routeMatches[0].index ?? -1;
-        const authGuardIndex = source.indexOf(\`\${contract.routerName}.use(requireAuth)\`, routerDeclaration);
-
-        assert.notEqual(authGuardIndex, -1, \`\${contract.path}: \${contract.routerName} is missing requireAuth\`);
         assert.ok(
-            authGuardIndex < firstRouteIndex,
-            \`\${contract.path}: \${contract.routerName} registers a route before requireAuth\`,
+            routeMatches.length > 0,
+            contract.path + ": no routes found for " + contract.routerName,
         );
 
-        const routerRoleGuardIndex = source.indexOf(\`\${contract.routerName}.use(requireRoles(\`, routerDeclaration);
+        const firstRouteIndex = routeMatches[0].index ?? -1;
+        const authGuardIndex = source.indexOf(
+            contract.routerName + ".use(requireAuth)",
+            routerDeclaration,
+        );
+
+        assert.notEqual(
+            authGuardIndex,
+            -1,
+            contract.path + ": " + contract.routerName + " is missing requireAuth",
+        );
+        assert.ok(
+            authGuardIndex < firstRouteIndex,
+            contract.path + ": " + contract.routerName + " registers a route before requireAuth",
+        );
+
+        const routerRoleGuardIndex = source.indexOf(
+            contract.routerName + ".use(requireRoles(",
+            routerDeclaration,
+        );
         if (contract.roleGuard === "router") {
             assert.notEqual(
                 routerRoleGuardIndex,
                 -1,
-                \`\${contract.path}: \${contract.routerName} is missing router-level requireRoles\`,
+                contract.path + ": " + contract.routerName + " is missing router-level requireRoles",
             );
             assert.ok(
                 routerRoleGuardIndex < firstRouteIndex,
-                \`\${contract.path}: \${contract.routerName} registers a route before router-level RBAC\`,
+                contract.path + ": " + contract.routerName + " registers a route before router-level RBAC",
             );
         }
 
@@ -72,22 +85,22 @@ test("administrative route families authenticate and authorize before validation
             assert.notEqual(
                 effectiveRoleGuardIndex,
                 -1,
-                \`\${contract.path} route #\${index + 1} is missing an RBAC guard\`,
+                contract.path + " route #" + (index + 1) + " is missing an RBAC guard",
             );
 
             const validationIndex = route.indexOf("validate(");
             if (validationIndex !== -1 && routeRoleGuardIndex !== -1) {
                 assert.ok(
                     routeRoleGuardIndex < validationIndex,
-                    \`\${contract.path} route #\${index + 1} validates input before route-level RBAC\`,
+                    contract.path + " route #" + (index + 1) + " validates input before route-level RBAC",
                 );
             }
 
-            const uploadIndex = route.search(/\\.(?:single|array|fields)\\(/);
+            const uploadIndex = route.search(/\.(?:single|array|fields)\(/);
             if (uploadIndex !== -1) {
                 assert.ok(
                     effectiveRoleGuardIndex < routeStart + uploadIndex,
-                    \`\${contract.path} route #\${index + 1} parses multipart data before RBAC\`,
+                    contract.path + " route #" + (index + 1) + " parses multipart data before RBAC",
                 );
             }
         }
