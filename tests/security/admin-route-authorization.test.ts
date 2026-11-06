@@ -21,76 +21,73 @@ const adminRouters: AdminRouterContract[] = [
     { path: "src/modules/contact/contact.routes.ts", routerName: "contactAdminRouter", roleGuard: "per-route" },
 ];
 
-function getRouteRegistrations(source: string, routerName: string): string[] {
-    const escapedName = routerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(
-        `\\b${escapedName}\\.(?:get|post|patch|put|delete)\\([\\s\\S]*?\\);`,
-        "g",
-    );
-    return [...source.matchAll(pattern)].map((match) => match[0]);
-}
-
 test("administrative route families authenticate and authorize before validation or upload parsing", () => {
     for (const contract of adminRouters) {
         const source = readFileSync(resolve(process.cwd(), contract.path), "utf8");
-        const routerDeclaration = source.indexOf(`const ${contract.routerName} = Router();`);
+        const routerDeclaration = source.indexOf(\`const \${contract.routerName} = Router();\`);
 
         assert.notEqual(
             routerDeclaration,
             -1,
-            `${contract.path}: missing ${contract.routerName} declaration`,
+            \`\${contract.path}: missing \${contract.routerName} declaration\`,
         );
 
-        const routeCalls = getRouteRegistrations(source, contract.routerName);
-        assert.ok(routeCalls.length > 0, `${contract.path}: no routes found for ${contract.routerName}`);
+        const routePattern = new RegExp(
+            String.raw\`\\b\${contract.routerName}\\.(?:get|post|patch|put|delete)\\([\\s\\S]*?\\);\`,
+            "g",
+        );
+        const routeMatches = [...source.matchAll(routePattern)];
+        assert.ok(routeMatches.length > 0, \`\${contract.path}: no routes found for \${contract.routerName}\`);
 
-        const firstRouteIndex = source.indexOf(`${contract.routerName}.${routeCalls[0].match(/\.(get|post|patch|put|delete)\(/)?.[1]}(`);
-        const authGuardIndex = source.indexOf(`${contract.routerName}.use(requireAuth)`, routerDeclaration);
+        const firstRouteIndex = routeMatches[0].index ?? -1;
+        const authGuardIndex = source.indexOf(\`\${contract.routerName}.use(requireAuth)\`, routerDeclaration);
 
-        assert.notEqual(authGuardIndex, -1, `${contract.path}: ${contract.routerName} is missing requireAuth`);
+        assert.notEqual(authGuardIndex, -1, \`\${contract.path}: \${contract.routerName} is missing requireAuth\`);
         assert.ok(
             authGuardIndex < firstRouteIndex,
-            `${contract.path}: ${contract.routerName} registers a route before requireAuth`,
+            \`\${contract.path}: \${contract.routerName} registers a route before requireAuth\`,
         );
 
-        const routerRoleGuardIndex = source.indexOf(`${contract.routerName}.use(requireRoles(`, routerDeclaration);
+        const routerRoleGuardIndex = source.indexOf(\`\${contract.routerName}.use(requireRoles(\`, routerDeclaration);
         if (contract.roleGuard === "router") {
             assert.notEqual(
                 routerRoleGuardIndex,
                 -1,
-                `${contract.path}: ${contract.routerName} is missing router-level requireRoles`,
+                \`\${contract.path}: \${contract.routerName} is missing router-level requireRoles\`,
             );
             assert.ok(
                 routerRoleGuardIndex < firstRouteIndex,
-                `${contract.path}: ${contract.routerName} registers a route before router-level RBAC`,
+                \`\${contract.path}: \${contract.routerName} registers a route before router-level RBAC\`,
             );
         }
 
-        for (const [index, route] of routeCalls.entries()) {
+        for (const [index, match] of routeMatches.entries()) {
+            const route = match[0];
+            const routeStart = match.index ?? -1;
             const routeRoleGuardIndex = route.indexOf("requireRoles(");
             const effectiveRoleGuardIndex = contract.roleGuard === "router"
                 ? routerRoleGuardIndex
-                : routeRoleGuardIndex;
+                : routeRoleGuardIndex === -1 ? -1 : routeStart + routeRoleGuardIndex;
 
             assert.notEqual(
                 effectiveRoleGuardIndex,
                 -1,
-                `${contract.path} route #${index + 1} is missing an RBAC guard`,
+                \`\${contract.path} route #\${index + 1} is missing an RBAC guard\`,
             );
 
             const validationIndex = route.indexOf("validate(");
             if (validationIndex !== -1 && routeRoleGuardIndex !== -1) {
                 assert.ok(
                     routeRoleGuardIndex < validationIndex,
-                    `${contract.path} route #${index + 1} validates input before route-level RBAC`,
+                    \`\${contract.path} route #\${index + 1} validates input before route-level RBAC\`,
                 );
             }
 
             const uploadIndex = route.search(/\\.(?:single|array|fields)\\(/);
-            if (uploadIndex !== -1 && routeRoleGuardIndex !== -1) {
+            if (uploadIndex !== -1) {
                 assert.ok(
-                    routeRoleGuardIndex < uploadIndex,
-                    `${contract.path} route #${index + 1} parses multipart data before route-level RBAC`,
+                    effectiveRoleGuardIndex < routeStart + uploadIndex,
+                    \`\${contract.path} route #\${index + 1} parses multipart data before RBAC\`,
                 );
             }
         }
