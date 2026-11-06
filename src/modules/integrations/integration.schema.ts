@@ -46,6 +46,7 @@ export const integrationSourceSchema = z.object({
   ctx.addIssue({code:"custom",path:["sync_interval_seconds"],message:"CSV upload and webhook sources cannot use scheduled polling"});
  }
 });
+export const integrationEnabledSchema=z.object({enabled:z.boolean()}).strict();
 export const integrationScheduleSchema=z.object({sync_interval_seconds:z.number().int().min(60).max(86400).nullable()}).strict();
 export const integrationIdSchema=z.object({id:z.coerce.number().int().positive()});
 export const integrationListSchema=z.object({enabled:z.enum(["true","false"]).optional(),system:z.enum(INTEGRATION_SYSTEMS).optional()});
